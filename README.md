@@ -22,6 +22,11 @@ The dedicated Haven documentation is available on GitBook:
 
 Use the docs for architecture notes, contributor setup, contract references, and protocol guides.
 
+Contract-specific contributor references in this repository:
+
+- [State transitions and invariants](./docs/STATE_TRANSITIONS.md)
+- [Registry events](./docs/EVENTS.md)
+
 ---
 
 ## 🎯 The Problem
