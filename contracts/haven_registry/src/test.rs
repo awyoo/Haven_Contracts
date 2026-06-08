@@ -22,7 +22,7 @@
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 use soroban_sdk::testutils::Events;
 
-use crate::{HavenRegistry, HavenRegistryClient};
+use crate::{DataKey, HavenRegistry, HavenRegistryClient};
 
 /// Helper: create a test environment and deploy the contract.
 fn setup() -> (Env, HavenRegistryClient<'static>, Address) {
@@ -59,6 +59,13 @@ fn test_register_device() {
     let hashed_imei = fake_hashed_imei(&env);
     let model = String::from_str(&env, "iPhone 15 Pro");
 
+    let initial_count: u32 = env
+        .storage()
+        .instance()
+        .get(&DataKey::DeviceCount)
+        .unwrap_or(0);
+    assert_eq!(initial_count, 0);
+
     let device = client.register_device(&owner, &hashed_imei, &model);
 
     assert_eq!(device.owner, owner);
@@ -77,7 +84,30 @@ fn test_register_device() {
     // Verify topics contain "dev_reg" and "register"
     assert_eq!(topics.len(), 2);
 
-    // TODO: Verify the device count was incremented
+    let count_after_first_registration: u32 = env
+        .storage()
+        .instance()
+        .get(&DataKey::DeviceCount)
+        .unwrap_or(0);
+    assert_eq!(count_after_first_registration, 1);
+
+    let second_owner = Address::generate(&env);
+    let second_hashed_imei = BytesN::from_array(&env, &[
+        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
+        0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30,
+        0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+        0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40,
+    ]);
+    let second_model = String::from_str(&env, "Pixel 9 Pro");
+
+    client.register_device(&second_owner, &second_hashed_imei, &second_model);
+
+    let count_after_second_registration: u32 = env
+        .storage()
+        .instance()
+        .get(&DataKey::DeviceCount)
+        .unwrap_or(0);
+    assert_eq!(count_after_second_registration, 2);
 }
 
 #[test]
