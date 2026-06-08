@@ -172,6 +172,22 @@ fn test_report_stolen_twice() {
     client.report_stolen(&owner, &hashed_imei, &1_000_000i128, &contact);
 }
 
+#[test]
+#[should_panic(expected = "not the device owner")]
+fn test_report_stolen_rejects_non_owner() {
+    let (env, client, _admin) = setup();
+    let owner = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let hashed_imei = fake_hashed_imei(&env);
+    let model = String::from_str(&env, "iPhone 15 Pro");
+    let contact = String::from_str(&env, "owner@email.com");
+
+    client.register_device(&owner, &hashed_imei, &model);
+
+    // Should panic — caller is not the registered owner.
+    client.report_stolen(&attacker, &hashed_imei, &1_000_000i128, &contact);
+}
+
 // ---------------------------------------------------------------------------
 // Recovery Tests
 // ---------------------------------------------------------------------------
@@ -214,6 +230,24 @@ fn test_recover_not_stolen() {
     client.confirm_recovery(&owner, &hashed_imei, &finder);
 }
 
+#[test]
+#[should_panic(expected = "not the device owner")]
+fn test_confirm_recovery_rejects_non_owner() {
+    let (env, client, _admin) = setup();
+    let owner = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let finder = Address::generate(&env);
+    let hashed_imei = fake_hashed_imei(&env);
+    let model = String::from_str(&env, "iPhone 15 Pro");
+    let contact = String::from_str(&env, "owner@email.com");
+
+    client.register_device(&owner, &hashed_imei, &model);
+    client.report_stolen(&owner, &hashed_imei, &1_000_000i128, &contact);
+
+    // Should panic — caller is not the registered owner.
+    client.confirm_recovery(&attacker, &hashed_imei, &finder);
+}
+
 // ---------------------------------------------------------------------------
 // Insurance Tests
 // ---------------------------------------------------------------------------
@@ -249,4 +283,20 @@ fn test_file_insurance_claim_twice() {
     client.file_insurance_claim(&owner, &hashed_imei, &insurer);
     // Should panic — already claimed
     client.file_insurance_claim(&owner, &hashed_imei, &insurer);
+}
+
+#[test]
+#[should_panic(expected = "not the device owner")]
+fn test_file_insurance_claim_rejects_non_owner() {
+    let (env, client, _admin) = setup();
+    let owner = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let insurer = Address::generate(&env);
+    let hashed_imei = fake_hashed_imei(&env);
+    let model = String::from_str(&env, "iPhone 15 Pro");
+
+    client.register_device(&owner, &hashed_imei, &model);
+
+    // Should panic — caller is not the registered owner.
+    client.file_insurance_claim(&attacker, &hashed_imei, &insurer);
 }
