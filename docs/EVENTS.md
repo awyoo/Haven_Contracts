@@ -1,56 +1,135 @@
 # Haven Registry Events
 
-This document describes the events emitted by the Haven Registry smart contract.
+This document describes the events emitted, or explicitly planned, by the
+Haven Registry smart contract for off-chain indexers, analytics jobs, and
+frontend notification services.
 
-## DeviceRegistered Event
+The raw IMEI is never included in an event. Indexers should use
+`hashed_imei: BytesN<32>` as the stable join key and call
+`get_device(hashed_imei)` when they need the full `DeviceState`.
+
+## Event Catalog
+
+| Event | Status | Function | Topics | Payload |
+|-------|--------|----------|--------|---------|
+| `DeviceRegistered` | Implemented | `register_device()` | `(dev_reg, register)` | `(hashed_imei: BytesN<32>, owner: Address, device_model: String)` |
+| `DeviceStolen` | Planned | `report_stolen()` | `(stolen)` | `(hashed_imei: BytesN<32>, bounty_amount: i128)` |
+| `DeviceRecovered` | Planned | `confirm_recovery()` | `(recovered)` | `(hashed_imei: BytesN<32>, finder: Address)` |
+| `InsuranceClaimed` | Planned | `file_insurance_claim()` | `(insured)` | `(hashed_imei: BytesN<32>, insurer: Address)` |
+
+## DeviceRegistered
 
 Emitted when a new device is successfully registered on-chain.
 
-### Event Structure
+**Source:** `contracts/haven_registry/src/device.rs::register_device`
 
 **Topics:**
-- `dev_reg` (symbol_short) - Event category identifier
-- `register` (symbol_short) - Event action identifier
+- `dev_reg` (`symbol_short`) - Device registry event namespace
+- `register` (`symbol_short`) - Registration action
 
-**Data Payload:**
-A tuple containing:
-1. `hashed_imei: BytesN<32>` - SHA-256 hash of the device IMEI
-2. `owner: Address` - Stellar address of the device owner
-3. `device_model: String` - Human-readable device model (e.g., "iPhone 15 Pro")
+**Payload fields:**
+- `hashed_imei: BytesN<32>` - SHA-256 hash of the device IMEI
+- `owner: Address` - Stellar address of the device owner
+- `device_model: String` - Human-readable device model, such as `iPhone 15 Pro`
 
-### Usage
+**Example:**
 
-This event is useful for:
-- **Indexers**: Building off-chain databases of registered devices
-- **Analytics**: Tracking device registration trends and statistics
-- **Notifications**: Alerting users when their device registration is confirmed
-- **Audit trails**: Maintaining immutable records of device ownership
-
-### Example
-
-When a user registers an iPhone 15 Pro, the event will contain:
-```
+```text
 Topics: ("dev_reg", "register")
-Data: (
-  0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20,  // hashed IMEI
-  GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX,              // owner address
-  "iPhone 15 Pro"                                                         // device model
+Payload: (
+  hashed_imei: 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20,
+  owner: GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX,
+  device_model: "iPhone 15 Pro"
 )
 ```
 
-### Integration Notes
+Indexer use cases:
+- build the canonical off-chain list of registered devices
+- notify a user after registration is confirmed
+- track registration volume and model distribution
 
-- The raw IMEI is **never** included in the event - only its SHA-256 hash
-- Events are emitted after the device state is persisted to storage
-- The device count is incremented before the event is emitted
-- Event emission occurs in the same transaction as device registration
+## Planned Lifecycle Events
 
-## Future Events
+The following events are documented as the expected stable contract for future
+event work. The module files already contain TODO markers for these emissions.
 
-The following events are planned for future implementation:
+### DeviceStolen
 
-- **DeviceStolen**: Emitted when a device is reported as stolen
-- **DeviceRecovered**: Emitted when a stolen device is recovered
-- **InsuranceClaimed**: Emitted when an insurance claim is filed
+Emitted when a device owner reports a registered device as stolen and records a
+recovery bounty.
 
-See the TODO comments in the respective module files for more details.
+**Source:** `contracts/haven_registry/src/killswitch.rs::report_stolen`
+
+**Topics:**
+- `stolen` (`symbol_short`) - Stolen-device lifecycle action
+
+**Payload fields:**
+- `hashed_imei: BytesN<32>` - Device hash being marked stolen
+- `bounty_amount: i128` - Promised escrow amount recorded for recovery
+
+**Example:**
+
+```text
+Topics: ("stolen")
+Payload: (
+  hashed_imei: 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20,
+  bounty_amount: 1000000
+)
+```
+
+### DeviceRecovered
+
+Emitted when the owner confirms a stolen device has been recovered.
+
+**Source:** `contracts/haven_registry/src/recovery.rs::confirm_recovery`
+
+**Topics:**
+- `recovered` (`symbol_short`) - Recovery lifecycle action
+
+**Payload fields:**
+- `hashed_imei: BytesN<32>` - Device hash being recovered
+- `finder: Address` - Stellar address of the finder receiving the bounty
+
+**Example:**
+
+```text
+Topics: ("recovered")
+Payload: (
+  hashed_imei: 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20,
+  finder: GCFINDERXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+)
+```
+
+### InsuranceClaimed
+
+Emitted when an insurance claim is filed and device salvage rights move to the
+insurer.
+
+**Source:** `contracts/haven_registry/src/insurance.rs::file_insurance_claim`
+
+**Topics:**
+- `insured` (`symbol_short`) - Insurance claim lifecycle action
+
+**Payload fields:**
+- `hashed_imei: BytesN<32>` - Device hash being claimed
+- `insurer: Address` - Stellar address of the insurer receiving salvage rights
+
+**Example:**
+
+```text
+Topics: ("insured")
+Payload: (
+  hashed_imei: 0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20,
+  insurer: GCINSURERXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+)
+```
+
+## Integration Notes
+
+- Events are emitted in the same transaction as their state transition.
+- `DeviceRegistered` is emitted after `DeviceState` is persisted and
+  `DeviceCount` is incremented.
+- Lifecycle event consumers should refresh `DeviceState` with
+  `get_device(hashed_imei)` before showing final UI state.
+- Indexers should not rely on raw IMEI values, recovery contact information, or
+  other PII appearing in event topics or payloads.

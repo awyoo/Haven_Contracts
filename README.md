@@ -344,6 +344,27 @@ pub enum DataKey {
 }
 ```
 
+### Contract Events for Indexers
+
+Haven indexers should subscribe to the Haven Registry contract and parse events
+by topic. The raw IMEI is never emitted; event payloads use the same
+`hashed_imei: BytesN<32>` value stored in `DataKey::Device`.
+
+See [docs/EVENTS.md](./docs/EVENTS.md) for examples and integration notes.
+
+| Event | Status | Emitted by | Topics | Payload |
+|-------|--------|------------|--------|---------|
+| `DeviceRegistered` | Implemented | `register_device()` in `device.rs` | `(dev_reg, register)` | `(hashed_imei: BytesN<32>, owner: Address, device_model: String)` |
+| `DeviceStolen` | Planned | `report_stolen()` in `killswitch.rs` | `(stolen)` | `(hashed_imei: BytesN<32>, bounty_amount: i128)` |
+| `DeviceRecovered` | Planned | `confirm_recovery()` in `recovery.rs` | `(recovered)` | `(hashed_imei: BytesN<32>, finder: Address)` |
+| `InsuranceClaimed` | Planned | `file_insurance_claim()` in `insurance.rs` | `(insured)` | `(hashed_imei: BytesN<32>, insurer: Address)` |
+
+Indexer guidance:
+- Treat `DeviceRegistered` as the source of truth for initial owner and device model indexing.
+- Treat the planned lifecycle events as the public contract for future event work already marked by TODOs in the module files.
+- Join lifecycle events back to device state with `hashed_imei`; do not expect raw IMEI or PII in topics or payloads.
+- Read `get_device(hashed_imei)` after a lifecycle event when an indexer needs the complete `DeviceState`.
+
 ---
 
 ## 🤝 Contributing
